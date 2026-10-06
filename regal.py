@@ -349,18 +349,14 @@ def create_app():
     app = Flask(__name__, static_folder=None)
     app.jinja_loader = DictLoader(TEMPLATES)
 
-    @app.route("/static/style.css")
-    def static_style():
-        return Response(STATIC_ASSETS["style.css"], mimetype="text/css")
+    @app.route("/static/<path:filename>", endpoint="static")
+    def static_files(filename):
+        asset = STATIC_ASSETS.get(filename)
+        if asset is None:
+            abort(404)
+        mimetype = "text/css" if filename.endswith(".css") else "application/javascript"
+        return Response(asset, mimetype=mimetype)
 
-    @app.route("/static/app.js")
-    def static_app_js():
-        return Response(STATIC_ASSETS["app.js"], mimetype="application/javascript")
-
-    @app.route("/static/chat.js")
-    def static_chat_js():
-        return Response(STATIC_ASSETS["chat.js"], mimetype="application/javascript")
-    app.secret_key = get_secret_key()
     app.config["MAX_CONTENT_LENGTH"] = int(config["max_upload_mb"]) * 1024 * 1024
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
