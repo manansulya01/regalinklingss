@@ -91,7 +91,16 @@ def load_users():
         users = data.get("users", []) if isinstance(data, dict) else []
         if not isinstance(users, list):
             raise ValueError("users must be a list")
-        return users
+        valid = []
+        for u in users:
+            if not isinstance(u, dict):
+                continue
+            if not u.get("username") or not u.get("password_hash") or u.get("role") not in ("admin", "student"):
+                continue
+            valid.append(u)
+        if not valid:
+            raise ValueError("no valid users")
+        return valid
     except (OSError, ValueError, json.JSONDecodeError, KeyError):
         users = [{
             "username": "k4ge",
