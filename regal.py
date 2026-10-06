@@ -347,6 +347,7 @@ def create_app():
     init_db()
 
     app = Flask(__name__, static_folder=None)
+    app.secret_key = get_secret_key()
     app.jinja_loader = DictLoader(TEMPLATES)
 
     @app.route("/static/<path:filename>", endpoint="static")
