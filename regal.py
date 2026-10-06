@@ -10,7 +10,7 @@ from datetime import datetime
 from functools import wraps
 from jinja2 import DictLoader
 
-from flask import (Flask, render_template, render_template_string, request, redirect, url_for,
+from flask import (Flask, render_template, request, redirect, url_for,
                    session, send_file, abort, flash, jsonify, Response)
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -63,6 +63,24 @@ def load_config():
             json.dump(cfg, f, indent=4)
     for k, v in DEFAULT_CONFIG.items():
         cfg.setdefault(k, v)
+
+    # Keep a broken/hand-edited config from preventing the server from starting.
+    if not isinstance(cfg.get("host"), str) or not cfg["host"].strip():
+        cfg["host"] = DEFAULT_CONFIG["host"]
+    try:
+        cfg["port"] = int(cfg.get("port", DEFAULT_CONFIG["port"]))
+    except (TypeError, ValueError):
+        cfg["port"] = DEFAULT_CONFIG["port"]
+    if not (1 <= cfg["port"] <= 65535):
+        cfg["port"] = DEFAULT_CONFIG["port"]
+    if not isinstance(cfg.get("server_name"), str) or not cfg["server_name"].strip():
+        cfg["server_name"] = DEFAULT_CONFIG["server_name"]
+    try:
+        cfg["max_upload_mb"] = int(cfg.get("max_upload_mb", DEFAULT_CONFIG["max_upload_mb"]))
+    except (TypeError, ValueError):
+        cfg["max_upload_mb"] = DEFAULT_CONFIG["max_upload_mb"]
+    if cfg["max_upload_mb"] < 1:
+        cfg["max_upload_mb"] = DEFAULT_CONFIG["max_upload_mb"]
     return cfg
 
 
@@ -96,7 +114,9 @@ def save_users(users):
 
 def find_user(username):
     for u in load_users():
-        if u["username"] == username:
+        if not isinstance(u, dict):
+            continue
+        if u.get("username") == username and u.get("password_hash") and u.get("role"):
             return u
     return None
 
@@ -111,6 +131,7 @@ def create_default_users():
         "username": "k4ge",
         "password_hash": generate_password_hash(default_admin_password),
         "role": "admin",
+        "display_name": "Manan Sulya",
     }]
     save_users(users)
     return users
@@ -118,8 +139,13 @@ def create_default_users():
 
 def get_secret_key():
     if os.path.exists(SECRET_FILE):
-        with open(SECRET_FILE, "r", encoding="utf-8") as f:
-            return f.read().strip()
+        try:
+            with open(SECRET_FILE, "r", encoding="utf-8") as f:
+                key = f.read().strip()
+            if key:
+                return key
+        except OSError:
+            pass
     key = secrets.token_hex(32)
     with open(SECRET_FILE, "w", encoding="utf-8") as f:
         f.write(key)
@@ -358,9 +384,10 @@ def create_app():
         mimetype = "text/css" if filename.endswith(".css") else "application/javascript"
         return Response(asset, mimetype=mimetype)
 
-    app.config["MAX_CONTENT_LENGTH"] = int(config["max_upload_mb"]) * 1024 * 1024
+    app.config["MAX_CONTENT_LENGTH"] = config["max_upload_mb"] * 1024 * 1024
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["SESSION_COOKIE_SECURE"] = False
 
     app.jinja_env.globals["csrf_token"] = csrf_token
 
